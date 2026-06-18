@@ -142,6 +142,19 @@
           </div>
         </div>
 
+        <!-- Fetch Mode Setting -->
+        <div class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">โหมดดึงข้อมูลเว็บ (CORS Bypass)</label>
+          <div class="flex items-center justify-between bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <span class="text-xs text-slate-300 flex items-center space-x-2">
+              <i data-lucide="zap" class="w-4 h-4 text-amber-500"></i>
+              <span title="ต้องติดตั้ง Extension Allow CORS ในเบราว์เซอร์">ดึงตรงไม่ผ่าน Proxy (Direct)</span>
+            </span>
+            <input type="checkbox" id="direct-fetch-toggle" class="w-4 h-4 accent-amber-500" />
+          </div>
+          <p class="text-[10px] text-slate-400 leading-relaxed">หาก Proxy ล้มเหลว ให้ติ๊กเปิดโหมดนี้ และติดตั้ง <a href="https://chromewebstore.google.com/detail/allow-cors-access-control/lhobafahddgcelffkeicbaginigeejlf" target="_blank" class="text-amber-400 hover:underline">Extension Allow CORS</a> ในเบราว์เซอร์ของคุณก่อนใช้งาน</p>
+        </div>
+
         <!-- Alert Sound Setting -->
         <div class="space-y-3">
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">ตัวเลือกเสียงเตือน</label>
@@ -329,6 +342,7 @@
     const ttsToggle = document.getElementById('tts-toggle');
     const sirenToggle = document.getElementById('siren-toggle');
     const testSoundBtn = document.getElementById('test-sound-btn');
+    const directFetchToggle = document.getElementById('direct-fetch-toggle');
     const scrapingSourceBadge = document.getElementById('scraping-source-badge');
     const intervalButtons = document.querySelectorAll('.interval-btn');
     const customIntervalInput = document.getElementById('custom-interval');
@@ -471,43 +485,69 @@
 
       appendLog(`เริ่มทำการดึงข้อมูล...`, 'info');
 
-      // Loop through proxies until one works
-      for (let i = 0; i < corsProxies.length; i++) {
-        const currentProxyIndex = (proxyIndex + i) % corsProxies.length;
-        const proxyUrl = corsProxies[currentProxyIndex];
-        const fullUrl = proxyUrl + encodeURIComponent(targetUrl);
-        
-        scrapingSourceBadge.textContent = `กำลังลอง Proxy: ${currentProxyIndex + 1}/${corsProxies.length}`;
-
+      if (directFetchToggle.checked) {
+        // --- DIRECT FETCH MODE ---
+        scrapingSourceBadge.textContent = `กำลังดึงข้อมูลตรง (Direct Fetch)`;
         try {
-          // Add timeout to fetch to not hang too long on bad proxies
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
-
-          const response = await fetch(fullUrl, { signal: controller.signal });
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          const response = await fetch(targetUrl, { signal: controller.signal });
           clearTimeout(timeoutId);
-
+          
           if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
           
-          if (proxyUrl.includes('allorigins.win/get')) {
-             const json = await response.json();
-             htmlText = json.contents;
-          } else {
-             htmlText = await response.text();
-          }
-
+          htmlText = await response.text();
           if (htmlText && htmlText.includes('yulgang')) {
-              fetchSuccess = true;
-              proxyIndex = currentProxyIndex; // Save working proxy for next time
-              scrapingSourceBadge.textContent = `โหลดสำเร็จ (Proxy ${proxyIndex + 1})`;
-              appendLog(`ดึงข้อมูลสำเร็จผ่าน Proxy ตัวที่ ${proxyIndex + 1}`, 'success');
-              break;
+            fetchSuccess = true;
+            scrapingSourceBadge.textContent = `โหลดสำเร็จ (ดึงตรง)`;
+            appendLog(`ดึงข้อมูลตรงจากเว็บหลักสำเร็จ!`, 'success');
           } else {
-              throw new Error("Invalid content received");
+            throw new Error("Invalid content received");
           }
-
         } catch (err) {
-          appendLog(`Proxy ตัวที่ ${currentProxyIndex + 1} ล้มเหลว (${err.name === 'AbortError' ? 'Timeout' : err.message})`, 'warn');
+          appendLog(`❌ โหมดดึงตรงล้มเหลว (${err.name === 'AbortError' ? 'Timeout' : err.message}) คุณเปิด Extension Allow CORS หรือยัง?`, 'danger');
+        }
+      } else {
+        // --- PROXY MODE ---
+        // Loop through proxies until one works
+        for (let i = 0; i < corsProxies.length; i++) {
+          const currentProxyIndex = (proxyIndex + i) % corsProxies.length;
+          const proxyUrl = corsProxies[currentProxyIndex];
+          const fullUrl = proxyUrl + encodeURIComponent(targetUrl);
+          
+          scrapingSourceBadge.textContent = `กำลังลอง Proxy: ${currentProxyIndex + 1}/${corsProxies.length}`;
+
+          try {
+            // Add timeout to fetch to not hang too long on bad proxies
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
+
+            const response = await fetch(fullUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
+            
+            if (proxyUrl.includes('allorigins.win/get')) {
+               const json = await response.json();
+               htmlText = json.contents;
+            } else {
+               htmlText = await response.text();
+            }
+
+            if (htmlText && htmlText.includes('yulgang')) {
+                fetchSuccess = true;
+                proxyIndex = currentProxyIndex; // Save working proxy for next time
+                scrapingSourceBadge.textContent = `โหลดสำเร็จ (Proxy ${proxyIndex + 1})`;
+                appendLog(`ดึงข้อมูลสำเร็จผ่าน Proxy ตัวที่ ${proxyIndex + 1}`, 'success');
+                break;
+            } else {
+                throw new Error("Invalid content received");
+            }
+
+          } catch (err) {
+            appendLog(`Proxy ตัวที่ ${currentProxyIndex + 1} ล้มเหลว (${err.name === 'AbortError' ? 'Timeout' : err.message})`, 'warn');
+          }
         }
       }
 
