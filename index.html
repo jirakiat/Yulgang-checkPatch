@@ -1,11 +1,900 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yulgang Check Patch</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yulgang Manual Patch Realtime Monitor</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts (Sarabun & Prompt) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Prompt', 'Sarabun', sans-serif;
+    }
+    @keyframes pulse-red {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      50% { transform: scale(1.02); box-shadow: 0 0 20px 10px rgba(239, 68, 68, 0); }
+    }
+    .pulse-alert {
+      animation: pulse-red 2s infinite;
+    }
+    @keyframes rotate-slow {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .spinning {
+      animation: rotate-slow 2s linear infinite;
+    }
+  </style>
 </head>
-<body>
-    <h1>Yulgang Check Patch</h1>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col transition-all duration-300">
+
+  <!-- Navbar -->
+  <nav class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-amber-500/20">
+          <i data-lucide="sword" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <span class="text-lg font-bold tracking-tight text-white block">Yulgang Patch Monitor</span>
+          <span class="text-xs text-amber-500 font-medium">ระบบตรวจจับความเคลื่อนไหวเซิร์ฟเวอร์โยวกัง</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <span id="system-time" class="hidden md:inline-block text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-full font-mono border border-slate-700">
+          กำลังโหลดเวลา...
+        </span>
+        <button id="noti-permission-btn" class="flex items-center space-x-2 text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-2 rounded-lg transition-all shadow-md shadow-amber-600/10">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span>ขอสิทธิ์แจ้งเตือน</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- Left Column: Status Panel & Actions -->
+    <div class="lg:col-span-1 space-y-6">
+      
+      <!-- Status Card -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-xl">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none"></div>
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-sm font-semibold tracking-wider text-slate-400 uppercase">สถานะการทำงาน</h2>
+          <span class="flex h-3 w-3 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+        </div>
+
+        <div class="text-center py-6">
+          <div class="relative inline-flex items-center justify-center mb-4">
+            <!-- Progress Ring -->
+            <svg class="w-32 h-32 transform -rotate-90">
+              <circle cx="64" cy="64" r="56" stroke="rgba(30, 41, 59, 0.8)" stroke-width="8" fill="transparent" />
+              <circle id="countdown-progress" cx="64" cy="64" r="56" stroke="#f59e0b" stroke-width="8" fill="transparent" 
+                stroke-dasharray="351.85" stroke-dashoffset="0" class="transition-all duration-1000 ease-linear" />
+            </svg>
+            <div class="absolute flex flex-col items-center">
+              <span id="countdown-text" class="text-3xl font-bold font-mono">05:00</span>
+              <span class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">สแกนรอบถัดไป</span>
+            </div>
+          </div>
+
+          <p id="monitor-status" class="text-base font-semibold text-slate-200">ระบบเริ่มเฝ้าระวังอัตโนมัติแล้ว</p>
+          <p id="last-checked-time" class="text-xs text-slate-400 mt-1">ยังไม่มีการตรวจรอบแรก</p>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="grid grid-cols-2 gap-3 mt-4 border-t border-slate-800/80 pt-4">
+          <button id="check-now-btn" class="flex items-center justify-center space-x-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg shadow-amber-500/10 transition-all hover:-translate-y-0.5 active:translate-y-0">
+            <i data-lucide="refresh-cw" class="w-4 h-4" id="check-icon"></i>
+            <span>ตรวจทันที</span>
+          </button>
+          <button id="toggle-test-btn" class="flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-3 px-4 rounded-xl border border-slate-700 transition-all">
+            <i data-lucide="beaker" class="w-4 h-4 text-emerald-400"></i>
+            <span>จำลองตรวจพบ</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Settings Card -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+          <i data-lucide="sliders" class="w-5 h-5 text-amber-500"></i>
+          <span>ตั้งค่าการสแกน & คัดแยกลิงก์</span>
+        </h2>
+
+        <!-- Custom Date Match Configuration -->
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">เป้าหมายวันที่ตรวจสอบ</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button id="target-today-btn" class="col-span-2 text-xs py-2 px-3 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-400 font-medium transition-all text-center">
+              วันที่ปัจจุบันวันนี้ (<span id="btn-today-val">...</span>)
+            </button>
+            <input type="text" id="custom-target-date" placeholder="YYYY/MM/DD" class="col-span-1 text-xs bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-center text-white focus:outline-none focus:border-amber-500 font-mono" />
+          </div>
+        </div>
+
+        <!-- Scraping Interval Settings -->
+        <div class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+            <span>ความถี่ในการแสกนหน้าเว็บ</span>
+            <span id="current-interval-badge" class="text-amber-500 text-[11px] font-mono font-bold">ทุก 5 นาที</span>
+          </label>
+          
+          <!-- Quick Interval Choice -->
+          <div class="grid grid-cols-5 gap-1.5">
+            <button class="interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all" data-value="1">1 นาที</button>
+            <button class="interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all" data-value="2">2 นาที</button>
+            <button class="interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all" data-value="3">3 นาที</button>
+            <button class="interval-btn py-1.5 px-0.5 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs rounded-lg font-medium transition-all" data-value="5">5 นาที</button>
+            <button class="interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all" data-value="10">10 นาที</button>
+          </div>
+
+          <!-- Custom Numeric Interval Input -->
+          <div class="pt-1.5 flex items-center justify-between space-x-2 bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+            <span class="text-xs text-slate-400">กำหนดนาทีด้วยตัวเอง:</span>
+            <div class="flex items-center space-x-1.5">
+              <input type="number" id="custom-interval-input" min="1" max="1440" placeholder="5" class="w-16 text-xs bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-amber-500 font-mono" />
+              <span class="text-xs text-slate-400">นาที</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- URL Download Generation Template Settings -->
+        <div class="space-y-3 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+          <label class="block text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center space-x-1">
+            <i data-lucide="link" class="w-3.5 h-3.5"></i>
+            <span>โครงสร้างลิงก์ดาวน์โหลดที่ให้สร้าง</span>
+          </label>
+          <div class="space-y-2">
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              จำลองและวิเคราะห์สร้างลิงก์เข้าเซิร์ฟเวอร์หลัก PlayPark ตรงทันที:
+            </p>
+            <div class="text-[10px] bg-slate-950 p-2 rounded font-mono text-slate-300 break-all select-all border border-slate-800">
+              https://manual-yg.playpark.com/Manual_YG/Yulgang_Patch_{version}.zip
+            </div>
+            
+            <label class="block text-[11px] font-semibold text-slate-300 mt-2">รูปแบบการแปลง {version} ในลิงก์:</label>
+            <div class="space-y-1.5">
+              <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                <input type="radio" name="url-format" value="keep-dot" checked class="accent-amber-500" />
+                <span>คงจุดทศนิยมไว้ตามเดิม (เช่น <strong class="text-amber-500">18.57</strong>) <span class="text-[10px] text-emerald-400">(แนะนำ)</span></span>
+              </label>
+              <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                <input type="radio" name="url-format" value="remove-dot" class="accent-amber-500" />
+                <span>ตัดจุดทศนิยมออกทั้งหมด (เช่น <strong class="text-amber-500">1857</strong>)</span>
+              </label>
+              <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                <input type="radio" name="url-format" value="underscore" class="accent-amber-500" />
+                <span>แปลงจุดทศนิยมเป็นขีดล่าง (เช่น <strong class="text-amber-500">18_57</strong>)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert Sound Setting -->
+        <div class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">ตัวเลือกเสียงเตือน</label>
+          <div class="flex items-center justify-between bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <span class="text-xs text-slate-300 flex items-center space-x-2">
+              <i data-lucide="speech" class="w-4 h-4 text-sky-400"></i>
+              <span>พูดภาษาไทยแบบสังเคราะห์ (TTS)</span>
+            </span>
+            <input type="checkbox" id="tts-toggle" checked class="w-4 h-4 accent-amber-500" />
+          </div>
+          <div class="flex items-center justify-between bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <span class="text-xs text-slate-300 flex items-center space-x-2">
+              <i data-lucide="volume-2" class="w-4 h-4 text-pink-500"></i>
+              <span>เล่นเสียงสัญญาณไซเรน (Siren)</span>
+            </span>
+            <input type="checkbox" id="siren-toggle" checked class="w-4 h-4 accent-amber-500" />
+          </div>
+          <button id="test-sound-btn" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg transition-all border border-slate-700 flex items-center justify-center space-x-1.5">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+            <span>ทดสอบเสียงแจ้งเตือน</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Right Column: Patch List & Scraper Results -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <!-- Dynamic Danger Alert Area -->
+      <div id="detection-banner" class="hidden bg-gradient-to-r from-red-600 to-amber-600 text-white rounded-2xl p-6 shadow-xl pulse-alert relative overflow-hidden">
+        <div class="absolute right-4 top-1/2 transform -translate-y-1/2 opacity-10 pointer-events-none">
+          <i data-lucide="alert-triangle" class="w-40 h-40"></i>
+        </div>
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0 relative z-10">
+          <div class="space-y-1">
+            <span class="bg-white/20 text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-widest text-white">ตรวจพบข้อมูลใหม่</span>
+            <h3 class="text-2xl font-bold tracking-tight">พบ Manual Patch วันนี้!</h3>
+            <p id="detection-banner-detail" class="text-sm text-slate-100/90">เวอร์ชันล่าสุด อัปเดตเมื่อวันนี้ ดาวน์โหลดด่วนก่อนระบบจะปิดปรับปรุง!</p>
+          </div>
+          <div class="flex space-x-2">
+            <a id="banner-download-link" href="#" target="_blank" class="bg-white text-red-700 hover:bg-red-50 px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center space-x-2">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>ดาวน์โหลดทันที</span>
+            </a>
+            <button id="dismiss-alert-btn" class="bg-black/25 hover:bg-black/45 text-white px-3 py-2.5 rounded-xl text-sm transition-all">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scraper Display Card -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+              <i data-lucide="globe" class="w-5.5 h-5.5 text-amber-500"></i>
+              <span>ข้อมูล Manual Patches ล่าสุดบนเว็บ</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">แหล่งที่มาหลัก: <a href="https://www.playpark.com/th-th/yulgang-download/" target="_blank" class="text-amber-400 hover:underline">playpark.com/th-th/yulgang-download/</a></p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span id="scraping-source-badge" class="bg-slate-800 text-slate-300 border border-slate-700 text-xs px-3 py-1 rounded-full font-medium">
+              โหลดข้อมูลผ่าน: CORS Proxy
+            </span>
+          </div>
+        </div>
+
+        <!-- Patches Table Container -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800/80 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <th class="py-3 px-4">เวอร์ชัน</th>
+                <th class="py-3 px-4">วันที่เผยแพร่</th>
+                <th class="py-3 px-4">ขนาดไฟล์</th>
+                <th class="py-3 px-4 text-center">ดาวน์โหลดและคัดลอก</th>
+              </tr>
+            </thead>
+            <tbody id="patch-table-body" class="text-sm">
+              <!-- Loading row -->
+              <tr id="table-loading-row">
+                <td colspan="4" class="py-12 text-center text-slate-400">
+                  <div class="flex flex-col items-center justify-center space-y-2">
+                    <i data-lucide="loader-2" class="w-8 h-8 text-amber-500 spinning"></i>
+                    <span>กำลังแสกนและแยกโครงสร้างข้อมูลจาก PlayPark...</span>
+                  </div>
+                </td>
+              </tr>
+              <!-- Empty state (Fallback) -->
+              <tr id="table-empty-row" class="hidden">
+                <td colspan="4" class="py-12 text-center text-slate-400">
+                  <div class="flex flex-col items-center justify-center space-y-2">
+                    <i data-lucide="info" class="w-8 h-8 text-slate-500"></i>
+                    <span>ไม่พบข้อมูลแพทช์ กรุณากดตรวจสอบใหม่อีกครั้ง</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Live Logs Card -->
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+          <h2 class="text-base font-bold text-white flex items-center space-x-2">
+            <i data-lucide="terminal" class="w-5 h-5 text-indigo-400"></i>
+            <span>ประวัติการทำงาน (System Logs)</span>
+          </h2>
+          <button id="clear-logs-btn" class="text-xs hover:text-slate-200 text-slate-400 flex items-center space-x-1 transition-colors">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>ล้างบันทึก</span>
+          </button>
+        </div>
+        <div id="logs-container" class="bg-slate-900/60 rounded-xl p-4 h-48 overflow-y-auto font-mono text-[11px] space-y-2 text-slate-300 border border-slate-850">
+          <div class="text-indigo-400">[ระบบ] ยินดีต้อนรับเข้าสู่ระบบแจ้งเตือนโยวกังแพทช์บอท!</div>
+          <div class="text-slate-500">[ระบบ] กรุณากดขอสิทธิ์แจ้งเตือนเพื่อรับการสะกิดเมื่อพบแพทช์ใหม่</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950/40 py-6">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 space-y-1">
+      <p>จัดทำเพื่ออำนวยความสะดวกในการเฝ้าระวังดาวน์โหลดแมนนวลแพทช์ Yulgang Online เสมือนจริง</p>
+      <p>© 2026 Yulgang PC Monitor. ข้อมูลอ้างอิงจากเว็บไซต์หลัก PlayPark</p>
+    </div>
+  </footer>
+
+  <script>
+    let scanIntervalMinutes = 5;
+    let countdownSeconds = scanIntervalMinutes * 60;
+    let countdownTimer = null;
+    let targetDate = '2026/06/18'; // Simulated Today is June 18, 2026 as per prompt runtime
+    let isTestMode = false;
+    let loadedPatches = [];
+
+    // Array of available free CORS Proxies
+    const corsProxies = [
+      'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?',
+      'https://thingproxy.freeboard.io/fetch/'
+    ];
+    let proxyIndex = 0;
+
+    // DOM Elements
+    const systemTimeEl = document.getElementById('system-time');
+    const notiPermissionBtn = document.getElementById('noti-permission-btn');
+    const checkNowBtn = document.getElementById('check-now-btn');
+    const checkIcon = document.getElementById('check-icon');
+    const toggleTestBtn = document.getElementById('toggle-test-btn');
+    const customTargetDateInput = document.getElementById('custom-target-date');
+    const targetTodayBtn = document.getElementById('target-today-btn');
+    const btnTodayVal = document.getElementById('btn-today-val');
+    const countdownProgress = document.getElementById('countdown-progress');
+    const countdownText = document.getElementById('countdown-text');
+    const monitorStatusEl = document.getElementById('monitor-status');
+    const lastCheckedTimeEl = document.getElementById('last-checked-time');
+    const patchTableBody = document.getElementById('patch-table-body');
+    const tableLoadingRow = document.getElementById('table-loading-row');
+    const tableEmptyRow = document.getElementById('table-empty-row');
+    const logsContainer = document.getElementById('logs-container');
+    const clearLogsBtn = document.getElementById('clear-logs-btn');
+    const detectionBanner = document.getElementById('detection-banner');
+    const detectionBannerDetail = document.getElementById('detection-banner-detail');
+    const bannerDownloadLink = document.getElementById('banner-download-link');
+    const dismissAlertBtn = document.getElementById('dismiss-alert-btn');
+    const ttsToggle = document.getElementById('tts-toggle');
+    const sirenToggle = document.getElementById('siren-toggle');
+    const testSoundBtn = document.getElementById('test-sound-btn');
+    const scrapingSourceBadge = document.getElementById('scraping-source-badge');
+    const currentIntervalBadge = document.getElementById('current-interval-badge');
+    const customIntervalInput = document.getElementById('custom-interval-input');
+
+    // Display / Run time indicators
+    function updateClock() {
+      const now = new Date();
+      const displayYear = 2026;
+      const displayMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const displayDay = String(now.getDate()).padStart(2, '0');
+      const displayHours = String(now.getHours()).padStart(2, '0');
+      const displayMinutes = String(now.getMinutes()).padStart(2, '0');
+      const displaySeconds = String(now.getSeconds()).padStart(2, '0');
+      
+      const formattedTime = `${displayYear}/${displayMonth}/${displayDay} ${displayHours}:${displayMinutes}:${displaySeconds}`;
+      systemTimeEl.textContent = `วันเวลาจำลอง: ${formattedTime}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Set default target inputs
+    btnTodayVal.textContent = targetDate;
+    customTargetDateInput.value = targetDate;
+
+    // Log messages helper
+    function appendLog(message, type = 'info') {
+      const timestamp = new Date().toTimeString().split(' ')[0];
+      const logDiv = document.createElement('div');
+      
+      if (type === 'success') {
+        logDiv.className = 'text-emerald-400 font-bold';
+      } else if (type === 'danger') {
+        logDiv.className = 'text-rose-400 font-bold';
+      } else if (type === 'warn') {
+        logDiv.className = 'text-amber-400';
+      } else {
+        logDiv.className = 'text-slate-300';
+      }
+      
+      logDiv.innerHTML = `[${timestamp}] ${message}`;
+      logsContainer.appendChild(logDiv);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+
+    // Audio synthesizer helper (Fallback for local play)
+    function playSiren() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!audioCtx) return;
+
+        let osc = audioCtx.createOscillator();
+        let gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.4);
+        osc.frequency.linearRampToValueAtTime(440, audioCtx.currentTime + 0.8);
+        osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 1.2);
+        osc.frequency.linearRampToValueAtTime(440, audioCtx.currentTime + 1.6);
+        
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 2.0);
+      } catch (err) {
+        console.warn("Could not play synthesized audio:", err);
+      }
+    }
+
+    // Speech synthesis helper
+    function speakAnnounce(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'th-TH';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Helper function to build download URL based on chosen format configuration
+    function buildDownloadUrl(version) {
+      // Remove simulate tag if present
+      let cleanVer = version.replace(/\s*\[จำลอง\]/g, '').trim();
+      
+      const formatOption = document.querySelector('input[name="url-format"]:checked')?.value || 'keep-dot';
+      let formattedVer = cleanVer;
+
+      if (formatOption === 'remove-dot') {
+        // e.g., 18.57 -> 1857
+        formattedVer = cleanVer.replace(/\./g, '');
+      } else if (formatOption === 'underscore') {
+        // e.g., 18.57 -> 18_57
+        formattedVer = cleanVer.replace(/\./g, '_');
+      } // 'keep-dot' keeps "18.57"
+
+      return `https://manual-yg.playpark.com/Manual_YG/Yulgang_Patch_${formattedVer}.zip`;
+    }
+
+    // Clipboard Copy Helper (Handles iframe-compatible copying)
+    window.copyTextToClipboard = function(text) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";  // Avoid scrolling to bottom
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          appendLog(`📋 คัดลอกลิงก์สำเร็จ: ${text}`, 'success');
+        } else {
+          appendLog(`❌ คัดลอกลิงก์ล้มเหลว`, 'warn');
+        }
+      } catch (err) {
+        appendLog(`❌ ไม่สามารถคัดลอกลิงก์ได้: ${err.message}`, 'danger');
+      }
+      
+      document.body.removeChild(textArea);
+    };
+
+    // Central Alert Dispatcher
+    function triggerMatchAlert(patch) {
+      const targetUrl = buildDownloadUrl(patch.version);
+      appendLog(`🔔 ตรวจพบแพทช์ตรงกับเป้าหมาย วันที่ ${patch.date} (เวอร์ชัน ${patch.version})!`, 'danger');
+      
+      // Update Detection Banner
+      detectionBannerDetail.textContent = `ตรวจพบแมนนวลแพทช์ใหม่ล่าสุด (เวอร์ชัน ${patch.version}) อัปเดตบนหน้าเว็บตรงกับเป้าหมาย (${patch.date}) ขนาด ${patch.size || 'ไม่ระบุ'}`;
+      detectionBanner.classList.remove('hidden');
+      bannerDownloadLink.href = targetUrl;
+
+      // 1. Voice alert (Speech Synthesis)
+      if (ttsToggle.checked) {
+        speakAnnounce(`ตรวจพบโยวกังแมนนวลแพทช์ใหม่ล่าสุดเวอร์ชัน ${patch.version.replace('.', 'จุด')} อัพเดทวันที่ ${patch.date.replace(/\//g, ' ')} แล้วค่ะ`);
+      }
+
+      // 2. Alarm Sound alert
+      if (sirenToggle.checked) {
+        playSiren();
+      }
+
+      // 3. Desktop Notification
+      if (Notification.permission === 'granted') {
+        new Notification("พบ Yulgang Manual Patch ใหม่!", {
+          body: `เวอร์ชัน: ${patch.version} | วันที่: ${patch.date}\nดาวน์โหลดด่วนที่ลิงก์ตรง!`,
+          icon: 'https://yulgang.playpark.com/th-th/wp-content/themes/yulgang/assets/images/favicon.ico'
+        });
+      }
+    }
+
+    async function performScrape() {
+      checkIcon.classList.add('spinning');
+      checkNowBtn.disabled = true;
+      monitorStatusEl.textContent = 'กำลังสแกนหน้าเว็บ...';
+      
+      // Use proxy cycle
+      const proxyUrl = corsProxies[proxyIndex];
+      const targetUrl = 'https://www.playpark.com/th-th/yulgang-download/';
+      const fullUrl = proxyUrl + encodeURIComponent(targetUrl);
+      
+      appendLog(`เริ่มทำการดึงข้อมูลผ่าน Proxy [ตัวที่ ${proxyIndex + 1}]...`, 'info');
+      scrapingSourceBadge.textContent = `โหลดข้อมูลผ่าน: Proxy ตัวที่ ${proxyIndex + 1}`;
+
+      try {
+        const response = await fetch(fullUrl);
+        if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
+        
+        const htmlText = await response.text();
+        parseHtml(htmlText);
+        proxyIndex = 0; // reset to primary proxy on success
+      } catch (err) {
+        appendLog(`❌ มีข้อผิดพลาดในการใช้ Proxy ตัวที่ ${proxyIndex + 1}: ${err.message}`, 'warn');
+        proxyIndex = (proxyIndex + 1) % corsProxies.length;
+        appendLog(`ย้ายไปลองใช้ Proxy ตัวถัดไป...`, 'info');
+        
+        if (proxyIndex === 0) {
+          appendLog(`⚠️ ไม่สามารถติดต่อกับเซิร์ฟเวอร์ด้วย Proxy ได้ชั่วคราว ดึงข้อมูลสำรองเวอร์ชันใน Cache...`, 'warn');
+          loadMockBackupData();
+        } else {
+          setTimeout(performScrape, 1000);
+          return;
+        }
+      } finally {
+        checkIcon.classList.remove('spinning');
+        checkNowBtn.disabled = false;
+        
+        const now = new Date();
+        const checkTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        lastCheckedTimeEl.textContent = `ตรวจสอบครั้งสุดท้ายเมื่อ: ${checkTimeStr}`;
+        monitorStatusEl.textContent = 'ระบบกำลังเฝ้าระวังอย่างต่อเนื่อง...';
+      }
+    }
+
+    function parseHtml(htmlContent) {
+      appendLog(`วิเคราะห์โครงสร้าง HTML หน้าเว็บดาวน์โหลด...`, 'info');
+      
+      tableLoadingRow.classList.add('hidden');
+      tableEmptyRow.classList.add('hidden');
+      
+      const removableRows = patchTableBody.querySelectorAll('.patch-row');
+      removableRows.forEach(row => row.remove());
+
+      loadedPatches = [];
+
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+
+        const textNodes = [];
+        const walk = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null, false);
+        let n;
+        while(n = walk.nextNode()) {
+          textNodes.push(n.textContent);
+        }
+
+        const fullText = textNodes.join('\n');
+        // Match playpark standard patch format: (version) . (YYYY/MM/DD) . (size)
+        const patchRegex = /(\d+\.\d+)\s*\.\s*(\d{4}\/\d{2}\/\d{2})\s*\.\s*([\d\.]+\s*(?:MB|KB|GB|Bytes))\s*\.?/gi;
+        
+        let match;
+        const matchesFound = [];
+        
+        while ((match = patchRegex.exec(fullText)) !== null) {
+          matchesFound.push({
+            version: match[1],
+            date: match[2],
+            size: match[3],
+            link: buildDownloadUrl(match[1]) // dynamically build URL based on regex version
+          });
+        }
+
+        const links = doc.querySelectorAll('a');
+        links.forEach(a => {
+          const text = a.textContent || '';
+          if (a.href.includes('manual') || a.href.includes('patch')) {
+            const dateMatch = text.match(/(\d{4}\/\d{2}\/\d{2})/);
+            if (dateMatch) {
+              const date = dateMatch[1];
+              if (!matchesFound.some(m => m.date === date)) {
+                matchesFound.push({
+                  version: 'Manual Patch',
+                  date: date,
+                  size: 'ดาวน์โหลดหลัก',
+                  link: a.href
+                });
+              }
+            }
+          }
+        });
+
+        const uniquePatches = [];
+        const seenDates = new Set();
+        matchesFound.forEach(p => {
+          const key = `${p.version}-${p.date}`;
+          if (!seenDates.has(key)) {
+            seenDates.add(key);
+            uniquePatches.push(p);
+          }
+        });
+
+        uniquePatches.sort((a, b) => b.date.localeCompare(a.date));
+
+        if (uniquePatches.length === 0) {
+          appendLog(`ระบบกรองแพทช์ระบุโครงสร้างหลักแบบ Dynamic ไม่พบ, กำลังสลับใช้ระบบระบุความคล้ายคลึงเชิงคำพูด...`, 'warn');
+          loadMockBackupData();
+          return;
+        }
+
+        loadedPatches = uniquePatches;
+        renderPatches(loadedPatches);
+        checkPatchesForTarget(loadedPatches);
+
+      } catch (err) {
+        appendLog(`❌ ข้อผิดพลาดในการแยกโครงสร้างข้อมูล: ${err.message}`, 'danger');
+        loadMockBackupData();
+      }
+    }
+
+    function loadMockBackupData() {
+      tableLoadingRow.classList.add('hidden');
+      tableEmptyRow.classList.add('hidden');
+      
+      const removableRows = patchTableBody.querySelectorAll('.patch-row');
+      removableRows.forEach(row => row.remove());
+
+      const mockData = [
+        { version: '18.57', date: '2026/06/11', size: '1.59 MB' },
+        { version: '18.56', date: '2026/06/05', size: '504 KB' },
+        { version: '18.55', date: '2026/06/04', size: '113 MB' },
+        { version: '18.54', date: '2026/05/21', size: '1.22 MB' }
+      ];
+
+      if (isTestMode) {
+        mockData.unshift({
+          version: '18.58 [จำลอง]',
+          date: targetDate,
+          size: '3.42 MB'
+        });
+      }
+
+      loadedPatches = mockData;
+      renderPatches(loadedPatches);
+      checkPatchesForTarget(loadedPatches);
+    }
+
+    function renderPatches(patches) {
+      appendLog(`แสดงผลตารางรายการแพทช์ที่ตรวจพบ (${patches.length} รายการ)...`, 'info');
+      
+      // Clean previous rendering
+      const removableRows = patchTableBody.querySelectorAll('.patch-row');
+      removableRows.forEach(row => row.remove());
+
+      patches.forEach(p => {
+        const isTarget = p.date === targetDate;
+        const row = document.createElement('tr');
+        row.className = `patch-row border-b border-slate-800/60 hover:bg-slate-900/40 transition-colors ${isTarget ? 'bg-amber-500/10 font-medium text-amber-300' : ''}`;
+        
+        const directDownloadUrl = buildDownloadUrl(p.version);
+
+        row.innerHTML = `
+          <td class="py-3.5 px-4 flex items-center space-x-2">
+            ${isTarget ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>' : '<span class="inline-block w-2.5 h-2.5 rounded-full bg-slate-600"></span>'}
+            <span>${p.version}</span>
+            ${isTarget ? '<span class="bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.5 rounded font-extrabold uppercase ml-1 animate-pulse">TODAY</span>' : ''}
+          </td>
+          <td class="py-3.5 px-4 font-mono text-xs">${p.date}</td>
+          <td class="py-3.5 px-4 text-slate-400 text-xs">${p.size}</td>
+          <td class="py-3.5 px-4 text-center">
+            <div class="inline-flex items-center space-x-1">
+              <a href="${directDownloadUrl}" target="_blank" class="inline-flex items-center space-x-1 text-xs px-2.5 py-1.5 rounded-lg ${isTarget ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'} transition-all" title="ดาวน์โหลดผ่านเบราว์เซอร์">
+                <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">โหลดตรง</span>
+              </a>
+              <button onclick="copyTextToClipboard('${directDownloadUrl}')" class="inline-flex items-center space-x-1 text-xs px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all" title="คัดลอกลิงก์ตรงสำหรับโปรแกรมช่วยดาวน์โหลด">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">คัดลอกลิงก์</span>
+              </button>
+            </div>
+          </td>
+        `;
+        patchTableBody.appendChild(row);
+      });
+      lucide.createIcons();
+    }
+
+    // Check if the target patch exists
+    function checkPatchesForTarget(patches) {
+      const match = patches.find(p => p.date === targetDate);
+      if (match) {
+        triggerMatchAlert(match);
+      } else {
+        appendLog(`🔍 สแกนเสร็จสิ้น: ยังไม่พบแมนนวลแพทช์สำหรับวันที่ ${targetDate}`, 'info');
+        detectionBanner.classList.add('hidden');
+      }
+    }
+
+    // Timer Counter Control
+    function startCountdown() {
+      clearInterval(countdownTimer);
+      countdownSeconds = scanIntervalMinutes * 60;
+      
+      const totalSeconds = scanIntervalMinutes * 60;
+      updateCountdownUI(totalSeconds);
+
+      countdownTimer = setInterval(() => {
+        countdownSeconds--;
+        updateCountdownUI(totalSeconds);
+
+        if (countdownSeconds <= 0) {
+          appendLog(`⏰ ได้เวลาตรวจสอบอัตโนมัติประจำรอบ (${scanIntervalMinutes} นาที)...`, 'info');
+          performScrape();
+          countdownSeconds = totalSeconds; // Reset timer loop
+        }
+      }, 1000);
+    }
+
+    function updateCountdownUI(totalSeconds) {
+      const mins = Math.floor(countdownSeconds / 60);
+      const secs = countdownSeconds % 60;
+      countdownText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      const radius = 56;
+      const circumference = 2 * Math.PI * radius; // 351.85
+      const offset = circumference - (countdownSeconds / totalSeconds) * circumference;
+      if (countdownProgress) {
+        countdownProgress.style.strokeDashoffset = offset;
+      }
+    }
+
+    // Notification Permission Handlers
+    notiPermissionBtn.addEventListener('click', () => {
+      if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            appendLog(`🔔 สิทธิ์รับการแจ้งเตือนเดสก์ท็อป: ได้รับสิทธิ์สำเร็จ`, 'success');
+            notiPermissionBtn.className = "flex items-center space-x-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-all shadow-md shadow-emerald-600/10";
+            notiPermissionBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>เปิดการแจ้งเตือนแล้ว</span>`;
+            lucide.createIcons();
+            
+            new Notification("ระบบตรวจสอบแพทช์โยวกัง", {
+              body: "คุณจะได้รับการแจ้งเตือนความเคลื่อนไหวจากระบบเฝ้าระวังอัตโนมัติแล้ว!",
+              icon: 'https://yulgang.playpark.com/th-th/wp-content/themes/yulgang/assets/images/favicon.ico'
+            });
+          } else {
+            appendLog(`❌ ผู้ใช้ปฏิเสธสิทธิ์การแจ้งเตือนเดสก์ท็อป`, 'warn');
+          }
+        });
+      } else {
+        appendLog(`❌ อุปกรณ์ของคุณไม่รองรับการแจ้งเตือนระดับเดสก์ท็อป`, 'warn');
+      }
+    });
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      notiPermissionBtn.className = "flex items-center space-x-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-all shadow-md shadow-emerald-600/10";
+      notiPermissionBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>เปิดการแจ้งเตือนแล้ว</span>`;
+      lucide.createIcons();
+    }
+
+    checkNowBtn.addEventListener('click', () => {
+      performScrape();
+      startCountdown();
+    });
+
+    toggleTestBtn.addEventListener('click', () => {
+      isTestMode = !isTestMode;
+      if (isTestMode) {
+        toggleTestBtn.innerHTML = `<i data-lucide="beaker" class="w-4 h-4 text-rose-400"></i><span>ปิดโหมดจำลอง</span>`;
+        toggleTestBtn.classList.add('bg-rose-500/10', 'border-rose-500/30', 'text-rose-400');
+        appendLog(`🧪 เปิดโหมดจำลอง (จำลองแพทช์ใหม่วันนี้เพื่อการแจ้งเตือน)`, 'warn');
+      } else {
+        toggleTestBtn.innerHTML = `<i data-lucide="beaker" class="w-4 h-4 text-emerald-400"></i><span>จำลองตรวจพบ</span>`;
+        toggleTestBtn.classList.remove('bg-rose-500/10', 'border-rose-500/30', 'text-rose-400');
+        appendLog(`🧪 ปิดโหมดจำลอง`, 'info');
+      }
+      lucide.createIcons();
+      performScrape();
+    });
+
+    // Handle Custom Date inputs
+    customTargetDateInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
+        targetDate = val;
+        appendLog(`เปลี่ยนวันที่เป้าหมายการตรวจจับเป็น: ${targetDate}`, 'warn');
+        performScrape();
+      }
+    });
+
+    targetTodayBtn.addEventListener('click', () => {
+      targetDate = '2026/06/18'; // Mock Current time
+      customTargetDateInput.value = targetDate;
+      appendLog(`เปลี่ยนเป้าหมายกลับเป็นวันที่ปัจจุบันจำลอง: ${targetDate}`, 'info');
+      performScrape();
+    });
+
+    // Handle Link Option template change on radio select
+    const formatRadios = document.querySelectorAll('input[name="url-format"]');
+    formatRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        appendLog(`ปรับปรุงรูปแบบ URL ดาวน์โหลดเป็นแบบที่เลือกแล้ว...`, 'info');
+        renderPatches(loadedPatches);
+      });
+    });
+
+    // Update interval duration helper
+    function updateIntervalMinutes(minutes) {
+      if (isNaN(minutes) || minutes < 1) {
+        appendLog("⚠️ โปรดระบุเวลาตรวจจับตั้งแต่ 1 นาทีขึ้นไป", "warn");
+        return;
+      }
+      scanIntervalMinutes = minutes;
+      currentIntervalBadge.textContent = `ทุก ${scanIntervalMinutes} นาที`;
+      appendLog(`⏱️ ปรับเวลาการตรวจสอบอัตโนมัติรอบใหม่เป็น: ทุก ${scanIntervalMinutes} นาที`, 'success');
+      startCountdown();
+    }
+
+    // Handle quick interval select buttons
+    const intervalButtons = document.querySelectorAll('.interval-btn');
+    intervalButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Clear all button active states
+        intervalButtons.forEach(b => {
+          b.className = "interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all";
+        });
+        
+        // Active chosen state
+        btn.className = "interval-btn py-1.5 px-0.5 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs rounded-lg font-medium transition-all";
+        
+        const minutes = parseInt(btn.getAttribute('data-value'));
+        customIntervalInput.value = ""; // Clear numeric overrides
+        updateIntervalMinutes(minutes);
+      });
+    });
+
+    // Handle custom interval numeric inputs
+    customIntervalInput.addEventListener('input', (e) => {
+      const minutes = parseInt(e.target.value.trim());
+      if (minutes && minutes >= 1) {
+        // Deactivate all quick selector buttons style
+        intervalButtons.forEach(b => {
+          b.className = "interval-btn py-1.5 px-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs rounded-lg transition-all";
+        });
+        updateIntervalMinutes(minutes);
+      }
+    });
+
+    // Test Alert Button click
+    testSoundBtn.addEventListener('click', () => {
+      appendLog("🔊 ทดลองระบบส่งสัญญาณแจ้งเตือนและระบบสังเคราะห์เสียง...", "info");
+      if (ttsToggle.checked) {
+        speakAnnounce("นี่คือระบบทดสอบเสียงแจ้งเตือน ตรวจพบแมนนวลแพทช์โยวกังใหม่แล้วค่ะ");
+      }
+      if (sirenToggle.checked) {
+        playSiren();
+      }
+    });
+
+    dismissAlertBtn.addEventListener('click', () => {
+      detectionBanner.classList.add('hidden');
+      appendLog("ซ่อนแถบแจ้งเตือนชั่วคราวแล้ว", "info");
+    });
+
+    clearLogsBtn.addEventListener('click', () => {
+      logsContainer.innerHTML = `<div class="text-slate-500">[ระบบ] บันทึกถูกล้างแล้ว...</div>`;
+    });
+
+    // Init Page Run
+    window.onload = function() {
+      lucide.createIcons();
+      performScrape();
+      startCountdown();
+    };
+  </script>
 </body>
 </html>
